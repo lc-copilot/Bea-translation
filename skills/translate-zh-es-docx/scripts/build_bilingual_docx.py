@@ -34,6 +34,9 @@ MARKER_RE = re.compile(r"\{\{fn:([A-Za-z0-9_-]+)\}\}")
 PUNCT = ".?!:;"
 
 # 注册常用 OOXML 命名空间，保证序列化保留 w:/r:/wp:/a:/pic: 等前缀。
+# 注意：不能在此注册空前缀——ET.register_namespace 注册新的空前缀会删除旧的
+# （同前缀清理），而 [Content_Types].xml 与 .rels 使用不同的默认命名空间；
+# 空（默认）命名空间在各自序列化前临时注册（见 _add_footnotes_*）。
 ET.register_namespace("w", W_NS)
 ET.register_namespace("r", R_NS)
 ET.register_namespace("wp",
@@ -248,7 +251,7 @@ def build(source: Path, manifest_path: Path, output: Path) -> None:
     bookmark_seq = [1000]
     for part in translatable_parts(parts):
         part_blocks = [b for b in blocks if b["part"] == part]
-        if not part_blocks and part != "word/footnotes.xml":
+        if not part_blocks:
             continue
         root = fn_root if part == "word/footnotes.xml" else ET.fromstring(parts[part])
         parent_map = {id(child): parent for parent in root.iter() for child in parent}
@@ -268,15 +271,20 @@ def build(source: Path, manifest_path: Path, output: Path) -> None:
             parent = parent_map[id(source_para)]
             index = list(parent).index(source_para)
             parent.insert(index + 1, new_para)
-        if part == "word/footnotes.xml":
-            for i, block in enumerate(blocks):
-                for note in block["notes"]:
-                    append_added_footnote(fn_root, note["text"],
-                                          note_ids[(i, note["key"])])
         parts[part] = _serialize(root)
 
-    if fn_created:
+    # 追加新增解释脚注：无论源是否有 footnotes.xml，都必须执行。
+    # 此前该逻辑只在循环内（依赖 footnotes part 存在），导致无脚注源的新增
+    # 脚注被静默丢弃（前向测试发现）。
+    has_notes = any(block["notes"] for block in blocks)
+    if has_notes:
+        for i, block in enumerate(blocks):
+            for note in block["notes"]:
+                append_added_footnote(fn_root, note["text"],
+                                      note_ids[(i, note["key"])])
+    if has_notes or fn_created:
         parts["word/footnotes.xml"] = _serialize(fn_root)
+    if fn_created:
         parts["[Content_Types].xml"] = _add_footnotes_content_type(
             parts["[Content_Types].xml"]
         )
@@ -298,6 +306,8 @@ def _add_footnotes_content_type(content_types_xml: bytes) -> bytes:
         override = ET.SubElement(root, f"{{{CT_NS}}}Override")
         override.set("PartName", "/word/footnotes.xml")
         override.set("ContentType", FOOTNOTES_CT)
+    # 序列化前临时把该文件的默认命名空间注册为无前缀，避免输出 ns0:
+    ET.register_namespace("", CT_NS)
     return _serialize(root)
 
 
@@ -318,6 +328,7 @@ def _add_footnotes_relationship(document_rels_xml: bytes) -> bytes:
         rel.set("Id", rid)
         rel.set("Type", FOOTNOTES_REL_TYPE)
         rel.set("Target", "footnotes.xml")
+    ET.register_namespace("", REL_NS)
     return _serialize(root)
 
 

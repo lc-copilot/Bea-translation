@@ -139,18 +139,15 @@ def iter_paragraphs(xml_bytes: bytes) -> Iterator[tuple[int, ET.Element]]:
         fn for fn in root.iter(qn("w:footnote"))
         if fn.get(qn("w:id")) in ("-1", "0")
     ]
-
-    def in_separator(paragraph: ET.Element) -> bool:
-        for sep in separators:
-            if any(node is paragraph for node in sep.iter()):
-                return True
-        return False
+    separator_para_ids = {
+        id(p) for sep in separators for p in sep.iter(qn("w:p"))
+    }
 
     index = 0
     for elem in root.iter(qn("w:p")):
         ordinal = index
         index += 1
-        if in_separator(elem):
+        if id(elem) in separator_para_ids:
             continue
         if paragraph_text(elem).strip() == "":
             continue
