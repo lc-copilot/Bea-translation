@@ -46,7 +46,8 @@ def _image_relationships(parts: dict[str, bytes]) -> dict[str, str]:
 
 
 def _spanish_runs_ok(para: ET.Element, errors: list[str], block_id: str) -> None:
-    fonts = [rf for rf in para.findall(".//" + qn("w:rFonts"))]
+    # 只检查 run 级 rPr（w:r/w:rPr/...），排除 deep copy 自源段落的段落级 rPr
+    fonts = [rf for rf in para.findall(".//" + qn("w:r") + "/" + qn("w:rPr") + "/" + qn("w:rFonts"))]
     if fonts and any(
         rf.get(qn("w:ascii")) != "Times New Roman"
         or rf.get(qn("w:hAnsi")) != "Times New Roman"
@@ -55,13 +56,16 @@ def _spanish_runs_ok(para: ET.Element, errors: list[str], block_id: str) -> None
         for rf in fonts
     ):
         errors.append(f"Spanish font is not Times New Roman at block {block_id}")
-    sizes = [sz.get(qn("w:val")) for sz in para.findall(".//" + qn("w:sz"))]
+    sizes = [sz.get(qn("w:val")) for sz in para.findall(
+        ".//" + qn("w:r") + "/" + qn("w:rPr") + "/" + qn("w:sz"))]
     if sizes and any(v != "24" for v in sizes):
         errors.append(f"Spanish size is not 12 pt at block {block_id}")
-    sizes_cs = [sz.get(qn("w:val")) for sz in para.findall(".//" + qn("w:szCs"))]
+    sizes_cs = [sz.get(qn("w:val")) for sz in para.findall(
+        ".//" + qn("w:r") + "/" + qn("w:rPr") + "/" + qn("w:szCs"))]
     if sizes_cs and any(v != "24" for v in sizes_cs):
         errors.append(f"Spanish size is not 12 pt at block {block_id}")
-    langs = [lg.get(qn("w:val")) for lg in para.findall(".//" + qn("w:lang"))]
+    langs = [lg.get(qn("w:val")) for lg in para.findall(
+        ".//" + qn("w:r") + "/" + qn("w:rPr") + "/" + qn("w:lang"))]
     if langs and any(v != "es-ES" for v in langs):
         errors.append(f"Spanish language is not es-ES at block {block_id}")
     ppr = para.find(qn("w:pPr"))
