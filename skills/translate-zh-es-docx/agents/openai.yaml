@@ -1,4 +1,0 @@
-interface:
-  display_name: "中西双语 DOCX 翻译器"
-  short_description: "把中文 Word 文档翻译成出版级中西双语西班牙语文档"
-  default_prompt: "使用 $translate-zh-es-docx 把这个中文 DOCX 翻译成中西双语西班牙语 Word 文档。"
